@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAC DADDY</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            margin-top: 40px;
+        }
+        
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 900;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+            letter-spacing: -2px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            font-size: 1.2rem;
+            margin-bottom: 40px;
+            font-weight: 300;
+        }
+        
+        .chat-container {
+            margin-bottom: 30px;
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .chat-container.active {
+            display: block;
+        }
+        
+        .message {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            line-height: 1.6;
+        }
+        
+        .message.user {
+            background: #667eea;
+            color: white;
+            margin-left: 20%;
+        }
+        
+        .message.assistant {
+            background: white;
+            color: #333;
+            margin-right: 20%;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .message.assistant a {
+            color: #667eea;
+            text-decoration: none;
+            border-bottom: 1px solid #667eea;
+        }
+        
+        .input-container {
+            position: relative;
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 120px;
+            transition: border-color 0.3s;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .button-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .submit-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .clear-btn {
+            background: #f0f0f0;
+            color: #666;
+        }
+        
+        .clear-btn:hover {
+            background: #e0e0e0;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            color: #667eea;
+            margin-top: 20px;
+            font-style: italic;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .error {
+            background: #fee;
+            color: #c00;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .error.active {
+            display: block;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+                margin-top: 20px;
+            }
+            
+            h1 {
+                font-size: 2.5rem;
+            }
+            
+            .subtitle {
+                font-size: 1rem;
+            }
+            
+            .message.user {
+                margin-left: 10%;
+            }
+            
+            .message.assistant {
+                margin-right: 10%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MAC DADDY</h1>
+        <p class="subtitle">Please ask your question below</p>
+        
+        <div class="chat-container" id="chatContainer"></div>
+        
+        <div class="input-container">
+            <textarea 
+                id="questionInput" 
+                placeholder="Type your question here..."
+                autofocus
+            ></textarea>
+            
+            <div class="button-container">
+                <button class="submit-btn" id="submitBtn" onclick="askQuestion()">
+                    Ask Question
+                </button>
+                <button class="clear-btn" id="clearBtn" onclick="clearConversation()" style="display: none;">
+                    New Conversation
+                </button>
+            </div>
+            
+            <div class="loading" id="loading">Generating answer...</div>
+            <div class="error" id="error"></div>
+        </div>
+    </div>
+    
+    <script>
+        let conversationHistory = [];
+        let isGenerating = false;
+        
+        // Allow Enter to submit (Shift+Enter for new line)
+        document.getElementById('questionInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                askQuestion();
+            }
+        });
+        
+        async function askQuestion() {
+            const input = document.getElementById('questionInput');
+            const question = input.value.trim();
+            
+            if (!question || isGenerating) return;
+            
+            isGenerating = true;
+            
+            // Hide error
+            document.getElementById('error').classList.remove('active');
+            
+            // Add user message to chat
+            addMessage(question, 'user');
+            
+            // Clear input and show loading
+            input.value = '';
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('submitBtn').disabled = true;
+            
+            // Show chat container
+            document.getElementById('chatContainer').classList.add('active');
+            
+            try {
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        history: conversationHistory
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to get response');
+                }
+                
+                // Create assistant message element
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message assistant';
+                document.getElementById('chatContainer').appendChild(messageDiv);
+                
+                let fullResponse = '';
+                
+                // Stream the response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = JSON.parse(line.slice(6));
+                            
+                            if (data.error) {
+                                throw new Error(data.error);
+                            }
+                            
+                            if (data.text) {
+                                fullResponse += data.text;
+                                messageDiv.textContent = fullResponse;
+                                // Auto-scroll
+                                messageDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                            }
+                            
+                            if (data.done) {
+                                // Add to conversation history
+                                conversationHistory.push({
+                                    role: 'user',
+                                    content: question
+                                });
+                                conversationHistory.push({
+                                    role: 'assistant',
+                                    content: fullResponse
+                                });
+                            }
+                        }
+                    }
+                }
+                
+                // Show clear button after first response
+                document.getElementById('clearBtn').style.display = 'block';
+                
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                document.getElementById('loading').classList.remove('active');
+                document.getElementById('submitBtn').disabled = false;
+                isGenerating = false;
+                input.focus();
+            }
+        }
+        
+        function addMessage(text, role) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            messageDiv.textContent = text;
+            chatContainer.appendChild(messageDiv);
+            messageDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+        
+        function clearConversation() {
+            conversationHistory = [];
+            document.getElementById('chatContainer').innerHTML = '';
+            document.getElementById('chatContainer').classList.remove('active');
+            document.getElementById('clearBtn').style.display = 'none';
+            document.getElementById('questionInput').focus();
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('active');
+        }
+    </script>
+</body>
+</html>
