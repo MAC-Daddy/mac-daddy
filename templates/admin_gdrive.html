@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAC DADDY - Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            margin-top: 40px;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 900;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+        }
+        
+        .login-form {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        .admin-panel {
+            display: none;
+        }
+        
+        .admin-panel.active {
+            display: block;
+        }
+        
+        input[type="password"],
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            margin-bottom: 15px;
+            transition: border-color 0.3s;
+            font-family: inherit;
+        }
+        
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-bottom: 10px;
+        }
+        
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .section h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .link-item {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        
+        .link-item input {
+            margin-bottom: 0;
+        }
+        
+        .link-item input[type="text"]:first-child {
+            flex: 0 0 200px;
+        }
+        
+        .link-item input[type="text"]:last-child {
+            flex: 1;
+        }
+        
+        .remove-btn {
+            flex: 0 0 80px;
+            padding: 10px;
+            background: #dc3545;
+            font-size: 0.9rem;
+        }
+        
+        .remove-btn:hover {
+            background: #c82333;
+        }
+        
+        .add-link-btn {
+            background: #28a745;
+        }
+        
+        .add-link-btn:hover {
+            background: #218838;
+        }
+        
+        .digest-btn {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            font-size: 1.3rem;
+            padding: 20px;
+        }
+        
+        .status-box {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+        
+        .error {
+            background: #fee;
+            color: #c00;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            display: none;
+        }
+        
+        .error.active {
+            display: block;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            display: none;
+        }
+        
+        .success.active {
+            display: block;
+        }
+        
+        .info-box {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .info-box h4 {
+            margin-bottom: 10px;
+        }
+        
+        .info-box ol {
+            margin-left: 20px;
+        }
+        
+        .info-box li {
+            margin-bottom: 5px;
+        }
+        
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MAC DADDY Admin</h1>
+        <p class="subtitle">Manage PDF Resources from Google Drive</p>
+        
+        <!-- Login Form -->
+        <div class="login-form" id="loginForm">
+            <div class="error" id="loginError"></div>
+            <input type="password" id="passwordInput" placeholder="Enter admin password" autofocus>
+            <button onclick="login()">Login</button>
+            <a href="/" class="back-link">← Back to MAC DADDY</a>
+        </div>
+        
+        <!-- Admin Panel -->
+        <div class="admin-panel" id="adminPanel">
+            <div class="error" id="error"></div>
+            <div class="success" id="success"></div>
+            
+            <!-- Instructions -->
+            <div class="info-box">
+                <h4>📋 How to Add PDFs from Google Drive:</h4>
+                <ol>
+                    <li>Upload your PDFs to Google Drive</li>
+                    <li>Right-click each PDF → Share → Change to "Anyone with the link can view"</li>
+                    <li>Copy the share link</li>
+                    <li>Paste the link below with a name</li>
+                    <li>Click "Save Links"</li>
+                    <li>Click "Digest PDFs" to process them</li>
+                </ol>
+            </div>
+            
+            <!-- PDF Links Section -->
+            <div class="section">
+                <h3>PDF Links</h3>
+                <div id="linksList"></div>
+                <button class="add-link-btn" onclick="addLinkField()">+ Add PDF Link</button>
+                <button onclick="saveLinks()">💾 Save Links</button>
+            </div>
+            
+            <!-- Digest Section -->
+            <div class="section">
+                <h3>Process PDFs</h3>
+                <button class="digest-btn" onclick="digestPdfs()">🔄 Digest PDFs</button>
+                <div class="status-box" id="statusBox" style="display:none;">
+                    <h4>Status:</h4>
+                    <div id="statusContent"></div>
+                </div>
+            </div>
+            
+            <a href="/" class="back-link">← Back to MAC DADDY</a>
+        </div>
+    </div>
+    
+    <script>
+        let links = [];
+        
+        checkLogin();
+        
+        async function checkLogin() {
+            try {
+                const response = await fetch('/admin/status');
+                if (response.ok) {
+                    showAdminPanel();
+                }
+            } catch (e) {
+                // Not logged in
+            }
+        }
+        
+        async function login() {
+            const password = document.getElementById('passwordInput').value;
+            const errorDiv = document.getElementById('loginError');
+            
+            try {
+                const response = await fetch('/admin/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ password })
+                });
+                
+                if (response.ok) {
+                    showAdminPanel();
+                } else {
+                    errorDiv.textContent = 'Invalid password';
+                    errorDiv.classList.add('active');
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Login failed: ' + error.message;
+                errorDiv.classList.add('active');
+            }
+        }
+        
+        async function showAdminPanel() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('adminPanel').classList.add('active');
+            await loadLinks();
+            await loadStatus();
+        }
+        
+        async function loadLinks() {
+            try {
+                const response = await fetch('/admin/get_links');
+                const data = await response.json();
+                links = data.links || [];
+                renderLinks();
+            } catch (error) {
+                console.error('Error loading links:', error);
+            }
+        }
+        
+        function renderLinks() {
+            const container = document.getElementById('linksList');
+            
+            if (links.length === 0) {
+                container.innerHTML = '<p style="color: #666;">No PDF links added yet. Click "Add PDF Link" below.</p>';
+                return;
+            }
+            
+            container.innerHTML = links.map((link, idx) => `
+                <div class="link-item">
+                    <input type="text" value="${link.name}" onchange="updateLinkName(${idx}, this.value)" placeholder="PDF Name">
+                    <input type="text" value="${link.url}" onchange="updateLinkUrl(${idx}, this.value)" placeholder="Google Drive Share Link">
+                    <button class="remove-btn" onclick="removeLink(${idx})">Remove</button>
+                </div>
+            `).join('');
+        }
+        
+        function addLinkField() {
+            links.push({ name: '', url: '' });
+            renderLinks();
+        }
+        
+        function updateLinkName(idx, value) {
+            links[idx].name = value;
+        }
+        
+        function updateLinkUrl(idx, value) {
+            links[idx].url = value;
+        }
+        
+        function removeLink(idx) {
+            links.splice(idx, 1);
+            renderLinks();
+        }
+        
+        async function saveLinks() {
+            try {
+                const response = await fetch('/admin/save_links', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ links })
+                });
+                
+                if (response.ok) {
+                    showSuccess('Links saved successfully!');
+                } else {
+                    showError('Failed to save links');
+                }
+            } catch (error) {
+                showError('Error saving links: ' + error.message);
+            }
+        }
+        
+        async function digestPdfs() {
+            const statusBox = document.getElementById('statusBox');
+            const statusContent = document.getElementById('statusContent');
+            
+            statusBox.style.display = 'block';
+            statusContent.innerHTML = '<p>🔄 Processing PDFs... This may take a few minutes.</p>';
+            
+            try {
+                const response = await fetch('/admin/digest', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    let html = `<p>✅ Processed ${data.processed} of ${data.total} PDFs</p>`;
+                    if (data.errors.length > 0) {
+                        html += '<p><strong>Errors:</strong></p><ul>';
+                        data.errors.forEach(err => {
+                            html += `<li>${err}</li>`;
+                        });
+                        html += '</ul>';
+                    }
+                    statusContent.innerHTML = html;
+                    showSuccess('PDFs digested successfully!');
+                    await loadStatus();
+                } else {
+                    showError(data.error || 'Failed to digest PDFs');
+                }
+            } catch (error) {
+                showError('Error digesting PDFs: ' + error.message);
+                statusContent.innerHTML = '<p>❌ Error processing PDFs</p>';
+            }
+        }
+        
+        async function loadStatus() {
+            try {
+                const response = await fetch('/admin/status');
+                const data = await response.json();
+                
+                const statusBox = document.getElementById('statusBox');
+                const statusContent = document.getElementById('statusContent');
+                
+                if (data.total_files > 0) {
+                    statusBox.style.display = 'block';
+                    statusContent.innerHTML = `
+                        <p><strong>Currently Available:</strong> ${data.total_files} PDFs</p>
+                        <ul>${data.files.map(f => `<li>${f}</li>`).join('')}</ul>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading status:', error);
+            }
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('active');
+            setTimeout(() => errorDiv.classList.remove('active'), 5000);
+        }
+        
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success');
+            successDiv.textContent = message;
+            successDiv.classList.add('active');
+            setTimeout(() => successDiv.classList.remove('active'), 3000);
+        }
+        
+        document.getElementById('passwordInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                login();
+            }
+        });
+    </script>
+</body>
+</html>
