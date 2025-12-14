@@ -1,61 +1,97 @@
 import os
 import json
+import re
+import io
 from flask import Flask, render_template, request, jsonify, Response, session
-from werkzeug.utils import secure_filename
 import PyPDF2
 import anthropic
 from datetime import datetime
 import secrets
+import requests
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(16))
 
 # Configuration
-UPLOAD_FOLDER = 'pdfs'
-ALLOWED_EXTENSIONS = {'pdf'}
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
+DATA_FOLDER = 'data'
+PDF_CONTENT_FILE = os.path.join(DATA_FOLDER, 'pdf_content.json')
+PDF_LINKS_FILE = os.path.join(DATA_FOLDER, 'pdf_links.json')
+os.makedirs(DATA_FOLDER, exist_ok=True)
 
-# Ensure upload folder exists
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-# Admin password (set this in Replit secrets)
+# Admin password
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'changeme123')
 
-# Anthropic API key (set this in Replit secrets)
+# Anthropic API key
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+def extract_file_id_from_url(url):
+    """Extract Google Drive file ID from share URL"""
+    patterns = [
+        r'/d/([a-zA-Z0-9-_]+)',
+        r'id=([a-zA-Z0-9-_]+)',
+        r'/file/d/([a-zA-Z0-9-_]+)',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
 
-def extract_text_from_pdf(pdf_path):
-    """Extract text from PDF file"""
+def download_pdf_from_drive(file_id, filename="unknown.pdf"):
+    """Download PDF from Google Drive using direct download link"""
+    try:
+        download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+        response = requests.get(download_url, timeout=60)
+        
+        if response.status_code == 200:
+            return response.content, filename
+        return None, None
+    except Exception as e:
+        print(f"Error downloading from Drive: {e}")
+        return None, None
+
+def extract_text_from_pdf_bytes(pdf_bytes):
+    """Extract text from PDF bytes"""
     text = ""
     try:
-        with open(pdf_path, 'rb') as file:
-            pdf_reader = PyPDF2.PdfReader(file)
-            for page_num, page in enumerate(pdf_reader.pages):
-                page_text = page.extract_text()
-                text += f"\n--- Page {page_num + 1} ---\n{page_text}"
+        pdf_file = io.BytesIO(pdf_bytes)
+        pdf_reader = PyPDF2.PdfReader(pdf_file)
+        for page_num, page in enumerate(pdf_reader.pages):
+            page_text = page.extract_text()
+            text += f"\n--- Page {page_num + 1} ---\n{page_text}"
     except Exception as e:
-        print(f"Error extracting text from {pdf_path}: {e}")
+        print(f"Error extracting PDF text: {e}")
     return text
 
-def get_all_pdf_content():
-    """Get content from all uploaded PDFs"""
-    pdf_content = {}
-    
-    if not os.path.exists(UPLOAD_FOLDER):
-        return pdf_content
-    
-    for filename in os.listdir(UPLOAD_FOLDER):
-        if allowed_file(filename):
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-            content = extract_text_from_pdf(filepath)
-            if content:
-                pdf_content[filename] = content
-    
-    return pdf_content
+def load_pdf_content():
+    """Load processed PDF content from JSON file"""
+    if os.path.exists(PDF_CONTENT_FILE):
+        try:
+            with open(PDF_CONTENT_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_pdf_content(content):
+    """Save processed PDF content to JSON file"""
+    with open(PDF_CONTENT_FILE, 'w', encoding='utf-8') as f:
+        json.dump(content, f, ensure_ascii=False, indent=2)
+
+def load_pdf_links():
+    """Load saved PDF links"""
+    if os.path.exists(PDF_LINKS_FILE):
+        try:
+            with open(PDF_LINKS_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return []
+    return []
+
+def save_pdf_links(links):
+    """Save PDF links"""
+    with open(PDF_LINKS_FILE, 'w') as f:
+        json.dump(links, f, indent=2)
 
 def search_pdfs(query, pdf_content):
     """Simple keyword search in PDFs"""
@@ -63,16 +99,14 @@ def search_pdfs(query, pdf_content):
     query_lower = query.lower()
     
     for filename, content in pdf_content.items():
-        # Split content by pages
         pages = content.split('--- Page')
         for page in pages:
             if query_lower in page.lower():
-                # Extract page number
                 page_num = page.split('---')[0].strip() if '---' in page else "Unknown"
                 results.append({
                     'filename': filename,
                     'page': page_num,
-                    'content': page[:1000]  # First 1000 chars of relevant page
+                    'content': page[:1000]
                 })
     
     return results
@@ -84,8 +118,8 @@ def index():
 
 @app.route('/admin')
 def admin():
-    """Admin interface for uploading PDFs"""
-    return render_template('admin.html')
+    """Admin interface"""
+    return render_template('admin_gdrive.html')
 
 @app.route('/admin/login', methods=['POST'])
 def admin_login():
@@ -96,56 +130,85 @@ def admin_login():
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': 'Invalid password'}), 401
 
-@app.route('/admin/upload', methods=['POST'])
-def upload_file():
-    """Handle PDF upload"""
+@app.route('/admin/save_links', methods=['POST'])
+def save_links():
+    """Save Google Drive PDF links"""
     if not session.get('admin'):
         return jsonify({'error': 'Unauthorized'}), 401
     
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
+    data = request.json
+    links = data.get('links', [])
     
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-    
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        return jsonify({'success': True, 'filename': filename})
-    
-    return jsonify({'error': 'Invalid file type'}), 400
+    save_pdf_links(links)
+    return jsonify({'success': True, 'count': len(links)})
 
-@app.route('/admin/files', methods=['GET'])
-def list_files():
-    """List all uploaded PDFs"""
+@app.route('/admin/get_links', methods=['GET'])
+def get_links():
+    """Get saved PDF links"""
     if not session.get('admin'):
         return jsonify({'error': 'Unauthorized'}), 401
     
-    files = []
-    if os.path.exists(UPLOAD_FOLDER):
-        for filename in os.listdir(UPLOAD_FOLDER):
-            if allowed_file(filename):
-                filepath = os.path.join(UPLOAD_FOLDER, filename)
-                files.append({
-                    'name': filename,
-                    'size': os.path.getsize(filepath),
-                    'modified': datetime.fromtimestamp(os.path.getmtime(filepath)).isoformat()
-                })
-    return jsonify({'files': files})
+    links = load_pdf_links()
+    return jsonify({'links': links})
 
-@app.route('/admin/delete/<filename>', methods=['DELETE'])
-def delete_file(filename):
-    """Delete a PDF"""
+@app.route('/admin/digest', methods=['POST'])
+def digest_pdfs():
+    """Process PDFs from saved Google Drive links"""
     if not session.get('admin'):
         return jsonify({'error': 'Unauthorized'}), 401
     
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(filename))
-    if os.path.exists(filepath):
-        os.remove(filepath)
-        return jsonify({'success': True})
-    return jsonify({'error': 'File not found'}), 404
+    links = load_pdf_links()
+    
+    if not links:
+        return jsonify({'error': 'No PDF links saved. Please add links first.'}), 400
+    
+    pdf_content = {}
+    processed = 0
+    errors = []
+    
+    for link_obj in links:
+        url = link_obj.get('url', '')
+        name = link_obj.get('name', 'Unknown')
+        
+        file_id = extract_file_id_from_url(url)
+        if not file_id:
+            errors.append(f"Invalid URL for {name}")
+            continue
+        
+        try:
+            pdf_bytes, _ = download_pdf_from_drive(file_id, name)
+            if pdf_bytes:
+                text = extract_text_from_pdf_bytes(pdf_bytes)
+                if text:
+                    pdf_content[name] = text
+                    processed += 1
+                else:
+                    errors.append(f"Could not extract text from {name}")
+            else:
+                errors.append(f"Could not download {name} - make sure sharing is set to 'Anyone with the link'")
+        except Exception as e:
+            errors.append(f"Error processing {name}: {str(e)}")
+    
+    save_pdf_content(pdf_content)
+    
+    return jsonify({
+        'success': True,
+        'processed': processed,
+        'total': len(links),
+        'errors': errors
+    })
+
+@app.route('/admin/status', methods=['GET'])
+def get_status():
+    """Get current status of processed PDFs"""
+    if not session.get('admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    pdf_content = load_pdf_content()
+    return jsonify({
+        'total_files': len(pdf_content),
+        'files': list(pdf_content.keys())
+    })
 
 @app.route('/ask', methods=['POST'])
 def ask_question():
@@ -160,22 +223,18 @@ def ask_question():
     if not ANTHROPIC_API_KEY:
         return jsonify({'error': 'API key not configured'}), 500
     
-    # Get all PDF content
-    pdf_content = get_all_pdf_content()
+    pdf_content = load_pdf_content()
     
     if not pdf_content:
-        return jsonify({'error': 'No PDFs uploaded yet. Please contact the administrator.'}), 400
+        return jsonify({'error': 'No PDFs processed yet. Please contact the administrator.'}), 400
     
-    # Search for relevant content
     relevant_content = search_pdfs(question, pdf_content)
     
-    # Build context from PDFs
     context = "Available reference materials:\n\n"
-    for idx, result in enumerate(relevant_content[:5]):  # Top 5 results
+    for idx, result in enumerate(relevant_content[:5]):
         context += f"[Source {idx+1}: {result['filename']}, Page {result['page']}]\n"
         context += f"{result['content'][:500]}...\n\n"
     
-    # Build conversation messages
     messages = []
     for msg in conversation_history:
         messages.append({
@@ -183,7 +242,6 @@ def ask_question():
             "content": msg["content"]
         })
     
-    # Add current question with context
     current_message = f"""Based ONLY on the following reference materials from uploaded PDFs, please answer this question. 
 If the answer is not in the provided materials, say so clearly.
 Always cite your sources using the format [Source X: filename, Page Y].
@@ -199,18 +257,22 @@ Question: {question}"""
     
     def generate():
         try:
-            client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+            client = anthropic.Client(api_key=ANTHROPIC_API_KEY)
             
-            with client.messages.stream(
+            response = client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=2000,
                 messages=messages,
-                system="You are a helpful medical education assistant. Answer questions based only on the provided reference materials. Always cite your sources. Be concise but thorough."
-            ) as stream:
-                for text in stream.text_stream:
-                    yield f"data: {json.dumps({'text': text})}\n\n"
+                system="You are a helpful medical education assistant. Answer questions based only on the provided reference materials. Always cite your sources. Be concise but thorough.",
+                stream=True
+            )
+            
+            for event in response:
+                if hasattr(event, 'delta') and hasattr(event.delta, 'text'):
+                    yield f"data: {json.dumps({'text': event.delta.text})}\n\n"
+            
+            yield f"data: {json.dumps({'done': True})}\n\n"
                 
-                yield f"data: {json.dumps({'done': True})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
     
